@@ -432,14 +432,14 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
     log.info(f"=== Transfer starting: scene_id={scene_id} ===")
 
     # 1. Full scene query (source)
-    log.info(f"[Source] Step 1/10: Fetching full scene {scene_id}")
+    log.info(f"[Source] Step 1/9: Fetching full scene {scene_id}")
     data = gql(source, FIND_FULL_SCENE, {"id": str(scene_id)})
     scene = data.get("findScene")
     if not scene:
         raise ValueError(f"Scene {scene_id} not found on source instance")
 
     title = scene.get("title") or f"Scene {scene_id}"
-    log.info(f"[Source] Step 1/10: Got scene title={title!r}")
+    log.info(f"[Source] Step 1/9: Got scene title={title!r}")
 
     if not scene.get("files"):
         raise ValueError(f"Scene {scene_id} has no associated files")
@@ -454,70 +454,68 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
             break
     if not oshash:
         raise ValueError(f"Scene {scene_id} has no oshash fingerprint")
-    log.info(f"[Source] Step 1/10: File path={source_path!r} filename={filename!r} oshash={oshash}")
+    log.info(f"[Source] Step 1/9: File path={source_path!r} filename={filename!r} oshash={oshash}")
 
     # 2. Fetch cover (source)
-    log.info(f"[Source] Step 2/10: Fetching cover image")
+    log.info(f"[Source] Step 2/9: Fetching cover image")
     cover_b64 = fetch_image_b64(source, (scene.get("paths") or {}).get("screenshot"))
-    log.info(f"[Source] Step 2/10: Cover fetched: {bool(cover_b64)}")
+    log.info(f"[Source] Step 2/9: Cover fetched: {bool(cover_b64)}")
 
     # 3. Resolve entities on destination (remote lookups / creates)
-    log.info(f"[{r}] Step 3/10: Resolving performers, tags, studio, groups on destination")
+    log.info(f"[{r}] Step 3/9: Resolving performers, tags, studio, groups on destination")
     performer_ids = []
     for p in scene.get("performers") or []:
         pid = resolver.resolve_performer(p)
         if pid:
             performer_ids.append(pid)
-    log.info(f"[{r}] Step 3/10: Resolved {len(performer_ids)} performers")
+    log.info(f"[{r}] Step 3/9: Resolved {len(performer_ids)} performers")
 
     tag_ids = []
     for t in scene.get("tags") or []:
-        if t["name"].lower() == tag_name.lower():
-            continue
         tid = resolver.resolve_tag(t)
         if tid:
             tag_ids.append(tid)
-    log.info(f"[{r}] Step 3/10: Resolved {len(tag_ids)} tags (excluding transfer tag)")
+    log.info(f"[{r}] Step 3/9: Resolved {len(tag_ids)} tags (including transfer tag)")
 
     studio_id = None
     if scene.get("studio"):
         studio_id = resolver.resolve_studio(scene["studio"])
-    log.info(f"[{r}] Step 3/10: Studio resolved: {studio_id is not None}")
+    log.info(f"[{r}] Step 3/9: Studio resolved: {studio_id is not None}")
 
     groups = []
     for g in scene.get("groups") or []:
         gid = resolver.resolve_group(g)
         if gid:
             groups.append({"group_id": gid, "scene_index": g.get("scene_index")})
-    log.info(f"[{r}] Step 3/10: Resolved {len(groups)} group entries")
+    log.info(f"[{r}] Step 3/9: Resolved {len(groups)} group entries")
 
     # 4. Move the file (filesystem — file in "purgatory" until remote scan + metadata done)
     dest_file = os.path.join(dest_path, filename)
     if os.path.exists(dest_file):
         raise FileExistsError(f"Destination already exists: {dest_file}")
-    log.info(f"[Filesystem] Step 4/10: Ensuring destination dir exists: {dest_path}")
+    log.info(f"[Filesystem] Step 4/9: Ensuring destination dir exists: {dest_path}")
     os.makedirs(dest_path, exist_ok=True)
-    log.info(f"[Filesystem] Step 4/10: Moving file: {source_path} -> {dest_file}")
+    log.info(f"[Filesystem] Step 4/9: Moving file: {source_path} -> {dest_file}")
     shutil.move(source_path, dest_file)
-    log.info(f"[Filesystem] Step 4/10: Move complete; file now only at destination path")
+    log.info(f"[Filesystem] Step 4/9: Move complete; file now only at destination path")
 
     try:
         # 5. Trigger scan on destination (remote)
-        log.info(f"[{r}] Step 5/10: Triggering metadata scan for path: {dest_file}")
+        log.info(f"[{r}] Step 5/9: Triggering metadata scan for path: {dest_file}")
         scan_result = gql(remote, TRIGGER_SCAN, {
             "input": {"paths": [dest_file]}
         })
         job_id = scan_result.get("metadataScan")
-        log.info(f"[{r}] Step 5/10: Scan triggered; job_id={job_id}")
+        log.info(f"[{r}] Step 5/9: Scan triggered; job_id={job_id}")
         wait_for_job(remote, job_id, log_prefix=r)
 
         # 6. Find the new scene on the destination (remote)
-        log.info(f"[{r}] Step 6/10: Looking up scene by destination path (and oshash fallback)")
+        log.info(f"[{r}] Step 6/9: Looking up scene by destination path (and oshash fallback)")
         new_scene_id = None
         for attempt in range(SCENE_FIND_MAX_ATTEMPTS):
             wait = min(2 ** attempt, 15)
             if attempt > 0:
-                log.info(f"[{r}] Step 6/10: Attempt {attempt + 1}/{SCENE_FIND_MAX_ATTEMPTS}: waiting {wait}s then re-querying")
+                log.info(f"[{r}] Step 6/9: Attempt {attempt + 1}/{SCENE_FIND_MAX_ATTEMPTS}: waiting {wait}s then re-querying")
             time.sleep(wait)
 
             result = gql(remote, FIND_SCENES_BY_PATH, {
@@ -527,12 +525,12 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
                 },
             })
             scenes_found = (result.get("findScenes") or {}).get("scenes") or []
-            log.info(f"[{r}] Step 6/10: findScenes(path={dest_file!r}) returned {len(scenes_found)} scene(s)")
+            log.info(f"[{r}] Step 6/9: findScenes(path={dest_file!r}) returned {len(scenes_found)} scene(s)")
             for s in scenes_found:
                 for f in s.get("files") or []:
                     if f.get("path") == dest_file:
                         new_scene_id = s["id"]
-                        log.info(f"[{r}] Step 6/10: Found scene by path: id={new_scene_id} path={f.get('path')!r}")
+                        log.info(f"[{r}] Step 6/9: Found scene by path: id={new_scene_id} path={f.get('path')!r}")
                         break
                 if new_scene_id:
                     break
@@ -544,11 +542,11 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
                 found = result.get("findSceneByHash")
                 if found:
                     new_scene_id = found["id"]
-                    log.info(f"[{r}] Step 6/10: Found scene by oshash fallback: id={new_scene_id}")
+                    log.info(f"[{r}] Step 6/9: Found scene by oshash fallback: id={new_scene_id}")
 
             if new_scene_id:
                 break
-            log.info(f"[{r}] Step 6/10: Scene not yet visible on destination (attempt {attempt + 1})")
+            log.info(f"[{r}] Step 6/9: Scene not yet visible on destination (attempt {attempt + 1})")
 
         if not new_scene_id:
             raise TimeoutError(
@@ -556,10 +554,10 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
                 f"oshash={oshash}, file={dest_file}"
             )
 
-        log.info(f"[{r}] Step 6/10: Using destination scene_id={new_scene_id}")
+        log.info(f"[{r}] Step 6/9: Using destination scene_id={new_scene_id}")
 
         # 7. Apply metadata (remote)
-        log.info(f"[{r}] Step 7/10: Applying metadata (title, performers, tags, studio, cover, etc.) to scene {new_scene_id}")
+        log.info(f"[{r}] Step 7/9: Applying metadata (title, performers, tags, studio, cover, etc.) to scene {new_scene_id}")
         update = {
             "id": new_scene_id,
             "title": scene.get("title"),
@@ -588,11 +586,11 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
         update = {k: v for k, v in update.items() if v is not None}
 
         gql(remote, SCENE_UPDATE, {"input": update})
-        log.info(f"[{r}] Step 7/10: sceneUpdate completed for scene {new_scene_id}")
+        log.info(f"[{r}] Step 7/9: sceneUpdate completed for scene {new_scene_id}")
 
         # 8. Recreate scene markers (remote)
         markers = scene.get("scene_markers") or []
-        log.info(f"[{r}] Step 8/10: Creating {len(markers)} scene marker(s)")
+        log.info(f"[{r}] Step 8/9: Creating {len(markers)} scene marker(s)")
         for marker in markers:
             primary_tag = marker.get("primary_tag")
             if not primary_tag:
@@ -612,36 +610,21 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
                 "primary_tag_id": ptag_id,
                 "tag_ids": mtag_ids,
             }})
-        log.info(f"[{r}] Step 8/10: Scene markers created")
+        log.info(f"[{r}] Step 8/9: Scene markers created")
 
     except Exception:
         log.error(f"Metadata failed after file move. File is at: {dest_file}")
         raise
 
-    # 9. Strip the transfer tag (source)
-    log.info(f"[Source] Step 9/10: Stripping transfer tag from scene {scene_id}")
-    remaining_tags = [
-        t["id"] for t in (scene.get("tags") or [])
-        if t["name"].lower() != tag_name.lower()
-    ]
-    try:
-        gql(source, SCENE_UPDATE, {"input": {
-            "id": str(scene_id),
-            "tag_ids": remaining_tags,
-        }})
-        log.info(f"[Source] Step 9/10: Transfer tag stripped")
-    except Exception as exc:
-        log.warning(f"Could not strip transfer tag from source scene {scene_id}: {exc}")
-
-    # 10. Cleanup source (source)
-    log.info(f"[Source] Step 10/10: Destroying scene record {scene_id} (file already moved)")
+    # 9. Cleanup source (source)
+    log.info(f"[Source] Step 9/9: Destroying scene record {scene_id} (file already moved)")
     try:
         gql(source, SCENE_DESTROY, {"input": {
             "id": str(scene_id),
             "delete_file": False,
             "delete_generated": True,
         }})
-        log.info(f"[Source] Step 10/10: Scene {scene_id} deleted from source")
+        log.info(f"[Source] Step 9/9: Scene {scene_id} deleted from source")
     except Exception as exc:
         log.error(
             f"Failed to delete source scene {scene_id}: {exc}. "
@@ -686,8 +669,7 @@ def dry_run(source, remote, tag_id, tag_name):
         for p in full.get("performers") or []:
             performers.add(p["name"])
         for t in full.get("tags") or []:
-            if t["name"].lower() != tag_name.lower():
-                tags.add(t["name"])
+            tags.add(t["name"])
         if full.get("studio"):
             studios.add(full["studio"]["name"])
         for g in full.get("groups") or []:
