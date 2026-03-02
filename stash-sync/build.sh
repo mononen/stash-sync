@@ -30,7 +30,7 @@ cat > index.yml <<EOF
 - id: ${PLUGIN_ID}
   name: Stash Sync
   version: ${VERSION}
-  date: ${DATE}
+  date: "${DATE}"
   path: ${PLUGIN_ID}.zip
   sha256: ${SHA}
   metadata:
