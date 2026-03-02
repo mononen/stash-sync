@@ -1,6 +1,6 @@
 name: Stash Sync
 description: Transfer scenes between two Stash instances with full metadata preservation
-version: 1.0.0
+version: 1.1.0
 
 ui:
   javascript:
@@ -31,6 +31,10 @@ interface: raw
 errLog: warning
 
 tasks:
+  - name: Test Connection
+    description: Verify connectivity and settings for the remote instance
+    defaultArgs:
+      mode: test_connection
   - name: Transfer Tagged Scenes
     description: Transfer all scenes tagged for transfer to the remote instance
     defaultArgs:

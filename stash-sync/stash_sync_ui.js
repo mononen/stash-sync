@@ -129,6 +129,28 @@
     return m ? m[1] : null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Mask the API key field in plugin settings
+  // ---------------------------------------------------------------------------
+
+  function maskApiKeyInputs() {
+    document.querySelectorAll(".setting").forEach((setting) => {
+      const heading = setting.querySelector("h6, label, .setting-header");
+      if (!heading) return;
+      if (!heading.textContent.includes("Remote API Key")) return;
+      const input = setting.querySelector('input[type="text"]');
+      if (input) {
+        input.type = "password";
+        input.autocomplete = "off";
+      }
+    });
+  }
+
+  new MutationObserver(maskApiKeyInputs).observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
   // Minimal styling injected once
   const style = document.createElement("style");
   style.textContent = `

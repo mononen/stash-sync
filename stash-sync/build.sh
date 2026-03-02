@@ -2,7 +2,7 @@
 set -e
 
 PLUGIN_ID="stash-sync"
-VERSION="1.0.0"
+VERSION="1.1.0"
 PLUGIN_FILES=(stash-sync.yml stash-sync.py stash_sync_ui.js requirements.txt)
 
 # ── Create zip with plugin files inside a stash-sync/ directory ──

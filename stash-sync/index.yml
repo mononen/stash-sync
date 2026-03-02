@@ -1,8 +1,8 @@
 - id: stash-sync
   name: Stash Sync
-  version: 1.0.0
-  date: "2026-03-02 16:16:04"
+  version: 1.1.0
+  date: "2026-03-02 16:32:20"
   path: stash-sync.zip
-  sha256: 373449b81f5c7bcc860fd72d901dc40464ca88261e4e5df71d76d5673d697899
+  sha256: 28c00f15c215e27a90f5f4cd88be910073ef1a232610b93dba02a55ee6c8ace0
   metadata:
     description: Transfer scenes between two Stash instances with full metadata preservation

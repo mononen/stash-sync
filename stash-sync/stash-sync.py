@@ -591,6 +591,72 @@ def dry_run(source, remote, tag_id, tag_name):
 
 
 # ---------------------------------------------------------------------------
+# Test connection
+# ---------------------------------------------------------------------------
+
+
+def test_connection(source, remote, remote_name, remote_url, dest_path, tag_name):
+    """Validate that all settings are correct and both instances can talk."""
+    errors = []
+
+    # 1. Remote API
+    log.info(f"[1/4] Remote instance ({remote_name} @ {remote_url})")
+    try:
+        ver = gql(remote, "query { version { version } }")
+        v = ver.get("version", {}).get("version", "unknown")
+        log.info(f"       OK — Stash v{v}")
+    except Exception as exc:
+        errors.append(f"Remote unreachable: {exc}")
+        log.error(f"       FAIL — {exc}")
+
+    # 2. Destination path writable
+    log.info(f"[2/4] Destination path: {dest_path}")
+    if os.path.isdir(dest_path):
+        test_file = os.path.join(dest_path, ".stash-sync-write-test")
+        try:
+            with open(test_file, "w") as f:
+                f.write("ok")
+            os.remove(test_file)
+            log.info("       OK — directory exists and is writable")
+        except OSError as exc:
+            errors.append(f"Destination not writable: {exc}")
+            log.error(f"       FAIL — not writable: {exc}")
+    else:
+        try:
+            os.makedirs(dest_path, exist_ok=True)
+            log.info("       OK — directory created")
+        except OSError as exc:
+            errors.append(f"Cannot create destination: {exc}")
+            log.error(f"       FAIL — cannot create: {exc}")
+
+    # 3. Transfer tag
+    log.info(f"[3/4] Transfer tag: {tag_name}")
+    try:
+        tag_id = ensure_tag(source, tag_name)
+        log.info(f"       OK — tag ID {tag_id}")
+    except Exception as exc:
+        errors.append(f"Tag issue: {exc}")
+        log.error(f"       FAIL — {exc}")
+
+    # 4. Remote can be scanned (test that the scan mutation is accepted)
+    log.info("[4/4] Remote scan permission")
+    try:
+        gql(remote, "query { jobQueue { id } }")
+        log.info("       OK — can query remote job queue")
+    except Exception as exc:
+        errors.append(f"Remote job query failed: {exc}")
+        log.error(f"       FAIL — {exc}")
+
+    # Summary
+    if errors:
+        log.error(f"=== FAILED — {len(errors)} issue(s) found ===")
+        for e in errors:
+            log.error(f"  • {e}")
+    else:
+        log.info("=== ALL CHECKS PASSED ===")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -645,6 +711,11 @@ def main():
         log.info(f"Connected to {remote_name} ({remote_url}) - v{v}")
     except Exception as exc:
         log.error(f"Cannot reach remote instance at {remote_url}: {exc}")
+        return
+
+    # --- Test Connection ---
+    if mode == "test_connection":
+        test_connection(source, remote, remote_name, remote_url, dest_path, tag_name)
         return
 
     resolver = EntityResolver(source, remote)
