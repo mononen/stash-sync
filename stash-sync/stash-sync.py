@@ -126,7 +126,28 @@ query Configuration {
 
 def gql(stash, query, variables=None):
     """Execute a GraphQL query against a StashInterface instance."""
-    return stash._callGraphQL(query, variables)
+    for attr in ("call_GQL", "callGQL", "_callGraphQL"):
+        fn = getattr(stash, attr, None)
+        if callable(fn):
+            return fn(query, variables)
+
+    # Fallback: raw HTTP request
+    headers = {"Content-Type": "application/json"}
+    api_key = getattr(stash, "api_key", "") or getattr(stash, "_api_key", "")
+    if api_key:
+        headers["ApiKey"] = api_key
+    url = getattr(stash, "url", None) or getattr(stash, "_url", "")
+    resp = requests.post(
+        url,
+        json={"query": query, "variables": variables or {}},
+        headers=headers,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    body = resp.json()
+    if body.get("errors"):
+        raise Exception(body["errors"][0].get("message", str(body["errors"])))
+    return body.get("data", {})
 
 
 def stash_base_url(stash):

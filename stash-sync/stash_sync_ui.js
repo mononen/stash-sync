@@ -2,9 +2,10 @@
   "use strict";
 
   const PLUGIN_ID = "stash-sync";
+  const BTN_ID = "stash-sync-transfer-btn";
 
   // ---------------------------------------------------------------------------
-  // GraphQL helpers (use the page's own /graphql endpoint)
+  // GraphQL helpers
   // ---------------------------------------------------------------------------
 
   async function callGQL(query, variables) {
@@ -18,16 +19,19 @@
     return json.data;
   }
 
+  let _remoteName = null;
   async function getRemoteName() {
+    if (_remoteName) return _remoteName;
     try {
       const data = await callGQL(
         "query { configuration { plugins } }"
       );
       const cfg = (data.configuration?.plugins ?? {})[PLUGIN_ID] ?? {};
-      return cfg.remote_name || "Remote";
+      _remoteName = cfg.remote_name || "Remote";
     } catch {
-      return "Remote";
+      _remoteName = "Remote";
     }
+    return _remoteName;
   }
 
   async function runTransferTask(sceneId) {
@@ -44,84 +48,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // React component – transfer button
-  // ---------------------------------------------------------------------------
-
-  function TransferButton() {
-    const React = PluginApi.React;
-    const [remoteName, setRemoteName] = React.useState(null);
-    const [busy, setBusy] = React.useState(false);
-    const [done, setDone] = React.useState(false);
-
-    React.useEffect(() => {
-      getRemoteName().then(setRemoteName);
-    }, []);
-
-    const sceneId = getSceneIdFromPath();
-    if (!sceneId || remoteName === null) return null;
-
-    async function handleClick() {
-      if (
-        !window.confirm(
-          `Transfer this scene to ${remoteName}?\n\nThe file will be moved and the scene will be removed from this instance.`
-        )
-      )
-        return;
-
-      setBusy(true);
-      try {
-        await runTransferTask(sceneId);
-        setDone(true);
-      } catch (err) {
-        window.alert("Transfer failed to start: " + err.message);
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    if (done) {
-      return React.createElement(
-        "div",
-        { className: "stash-sync-btn-wrapper" },
-        React.createElement(
-          "button",
-          { className: "btn btn-success", disabled: true },
-          "Transfer started — check Tasks for progress"
-        )
-      );
-    }
-
-    return React.createElement(
-      "div",
-      { className: "stash-sync-btn-wrapper" },
-      React.createElement(
-        "button",
-        {
-          className: "btn btn-primary",
-          disabled: busy,
-          onClick: handleClick,
-        },
-        busy ? "Starting transfer…" : `Transfer to ${remoteName}`
-      )
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Patch ScenePage to append the button
-  // ---------------------------------------------------------------------------
-
-  PluginApi.patch.after("ScenePage", function (_props, result) {
-    const React = PluginApi.React;
-    return React.createElement(
-      React.Fragment,
-      null,
-      result,
-      React.createElement(TransferButton)
-    );
-  });
-
-  // ---------------------------------------------------------------------------
-  // Utility
+  // Transfer button – injected into the DOM (no React patching)
   // ---------------------------------------------------------------------------
 
   function getSceneIdFromPath() {
@@ -129,35 +56,139 @@
     return m ? m[1] : null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Mask the API key field in plugin settings
-  // ---------------------------------------------------------------------------
-
-  function maskApiKeyInputs() {
-    document.querySelectorAll(".setting").forEach((setting) => {
-      const heading = setting.querySelector("h6, label, .setting-header");
-      if (!heading) return;
-      if (!heading.textContent.includes("Remote API Key")) return;
-      const input = setting.querySelector('input[type="text"]');
-      if (input) {
-        input.type = "password";
-        input.autocomplete = "off";
-      }
-    });
+  function removeTransferButton() {
+    const existing = document.getElementById(BTN_ID);
+    if (existing) existing.remove();
   }
 
-  new MutationObserver(maskApiKeyInputs).observe(document.body, {
+  async function injectTransferButton() {
+    const sceneId = getSceneIdFromPath();
+    if (!sceneId) {
+      removeTransferButton();
+      return;
+    }
+
+    // Already injected for this scene
+    const existing = document.getElementById(BTN_ID);
+    if (existing && existing.dataset.sceneId === sceneId) return;
+    removeTransferButton();
+
+    // Find the scene page toolbar / header to attach to
+    const toolbar =
+      document.querySelector(".scene-toolbar") ||
+      document.querySelector(".scene-header") ||
+      document.querySelector("#scene-page-container .scene-info") ||
+      document.querySelector("#scene-page-container");
+
+    if (!toolbar) return;
+
+    const remoteName = await getRemoteName();
+
+    const btn = document.createElement("button");
+    btn.id = BTN_ID;
+    btn.dataset.sceneId = sceneId;
+    btn.className = "btn btn-primary stash-sync-btn";
+    btn.textContent = "Transfer to " + remoteName;
+
+    btn.addEventListener("click", async () => {
+      if (
+        !window.confirm(
+          "Transfer this scene to " +
+            remoteName +
+            "?\n\nThe file will be moved and the scene removed from this instance."
+        )
+      )
+        return;
+
+      btn.disabled = true;
+      btn.textContent = "Starting transfer\u2026";
+
+      try {
+        await runTransferTask(sceneId);
+        btn.className = "btn btn-success stash-sync-btn";
+        btn.textContent = "Transfer started \u2014 check Tasks for progress";
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Transfer to " + remoteName;
+        window.alert("Transfer failed to start: " + err.message);
+      }
+    });
+
+    toolbar.appendChild(btn);
+  }
+
+  // Re-inject on navigation
+  PluginApi.Event.addEventListener("stash:location", () => {
+    setTimeout(injectTransferButton, 300);
+  });
+
+  // Also try on initial load
+  setTimeout(injectTransferButton, 500);
+
+  // ---------------------------------------------------------------------------
+  // Mask the API key field in plugin settings (DOM-only, settings page)
+  // ---------------------------------------------------------------------------
+
+  function maskApiKeyFields() {
+    // Only act on the settings page
+    if (!window.location.pathname.includes("/settings")) return;
+
+    for (const h of document.querySelectorAll("h6, h5, label")) {
+      if (h.textContent.trim() !== "Remote API Key") continue;
+
+      let container = h.parentElement;
+      while (
+        container &&
+        container.children.length < 2 &&
+        container.parentElement !== document.body
+      ) {
+        container = container.parentElement;
+      }
+      if (!container || container.dataset.ssMasked) continue;
+      container.dataset.ssMasked = "true";
+
+      Array.from(container.children).forEach((child) => {
+        if (child.contains(h)) return;
+        if (child.matches("button, .btn, [class*='btn']")) return;
+        child.classList.add("ss-blurred-value");
+
+        child.querySelectorAll("input[type='text']").forEach((inp) => {
+          inp.type = "password";
+          inp.autocomplete = "off";
+        });
+      });
+    }
+
+    // Catch late-rendered inputs (after clicking Edit)
+    document
+      .querySelectorAll(".ss-blurred-value input[type='text']")
+      .forEach((inp) => {
+        inp.type = "password";
+        inp.autocomplete = "off";
+      });
+  }
+
+  new MutationObserver(maskApiKeyFields).observe(document.body, {
     childList: true,
     subtree: true,
   });
 
-  // Minimal styling injected once
+  // ---------------------------------------------------------------------------
+  // Styles
+  // ---------------------------------------------------------------------------
+
   const style = document.createElement("style");
   style.textContent = `
-    .stash-sync-btn-wrapper {
-      padding: 0.5rem 1rem;
-      display: flex;
-      justify-content: flex-end;
+    .stash-sync-btn {
+      margin: 0.5rem;
+    }
+    .ss-blurred-value {
+      filter: blur(5px);
+      transition: filter 0.15s;
+      cursor: pointer;
+    }
+    .ss-blurred-value:hover {
+      filter: none;
     }
   `;
   document.head.appendChild(style);
