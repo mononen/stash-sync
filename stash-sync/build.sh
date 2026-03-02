@@ -23,7 +23,7 @@ else
     SHA=$(shasum -a 256 "${PLUGIN_ID}.zip" | awk '{print $1}')
 fi
 
-DATE=$(date +%Y-%m-%d)
+DATE=$(date +"%Y-%m-%d %H:%M:%S")
 
 # ── Generate index.yml ──
 cat > index.yml <<EOF
