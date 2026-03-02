@@ -83,37 +83,26 @@
     if (existing) existing.remove();
   }
 
-  function findThreeDotDropdownMenu() {
-    const container =
-      document.querySelector("#scene-page-container") ||
-      document.querySelector(".scene-toolbar") ||
-      document.querySelector(".scene-header");
-    if (!container) return null;
-    const dropdowns = container.querySelectorAll(".dropdown-menu");
-    for (const menu of dropdowns) {
-      const trigger = menu.previousElementSibling || menu.parentElement?.querySelector(".dropdown-toggle");
-      if (!trigger) continue;
-      const icon = trigger.querySelector("svg, .fa-ellipsis-v, .fa-ellipsis");
-      if (icon || trigger.getAttribute("aria-label")?.toLowerCase().includes("menu")) {
-        return menu;
-      }
-    }
-    return dropdowns[dropdowns.length - 1] || null;
+  function isSceneOperationsMenu(menu) {
+    const text = menu.textContent || "";
+    return (
+      text.includes("Rescan") &&
+      (text.includes("Delete") || text.includes("Generate"))
+    );
   }
 
-  async function injectTransferMenuItem() {
-    const sceneId = getSceneIdFromPath();
-    if (!sceneId) {
-      removeTransferMenuItem();
-      return;
+  function findSceneOperationsDropdown() {
+    const menus = document.querySelectorAll(".dropdown-menu.show");
+    for (const menu of menus) {
+      if (isSceneOperationsMenu(menu)) return menu;
     }
+    return null;
+  }
 
-    const existing = document.getElementById(MENU_ITEM_ID);
-    if (existing && existing.dataset.sceneId === sceneId) return;
-    removeTransferMenuItem();
-
-    const menu = findThreeDotDropdownMenu();
-    if (!menu) return;
+  async function addTransferItemToMenu(menu) {
+    if (!menu || document.getElementById(MENU_ITEM_ID)) return;
+    const sceneId = getSceneIdFromPath();
+    if (!sceneId) return;
 
     const remoteName = await getRemoteName();
 
@@ -149,10 +138,40 @@
     menu.appendChild(li);
   }
 
+  function tryInjectTransferMenuItem() {
+    if (!getSceneIdFromPath()) {
+      removeTransferMenuItem();
+      return;
+    }
+    const menu = findSceneOperationsDropdown();
+    if (menu) addTransferItemToMenu(menu);
+  }
+
   PluginApi.Event.addEventListener("stash:location", () => {
-    setTimeout(injectTransferMenuItem, 300);
+    removeTransferMenuItem();
+    setTimeout(tryInjectTransferMenuItem, 300);
   });
-  setTimeout(injectTransferMenuItem, 500);
+
+  setTimeout(tryInjectTransferMenuItem, 500);
+
+  let injectScheduled = false;
+  function scheduleInject() {
+    if (!getSceneIdFromPath() || injectScheduled) return;
+    injectScheduled = true;
+    requestAnimationFrame(() => {
+      tryInjectTransferMenuItem();
+      setTimeout(() => { injectScheduled = false; }, 100);
+    });
+  }
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type === "childList" || (m.type === "attributes" && m.attributeName === "class")) {
+        scheduleInject();
+        break;
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 
   // ---------------------------------------------------------------------------
   // Mask the API key field in plugin settings (DOM-only, settings page)
