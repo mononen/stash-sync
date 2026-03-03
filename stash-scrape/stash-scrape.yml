@@ -1,0 +1,54 @@
+name: Stash Scrape
+description: Scrape scene metadata in the background as a task, with configurable attribute creation
+version: 0.1.0
+
+ui:
+  javascript:
+    - stash_scrape_ui.js
+
+settings:
+  create_studio:
+    displayName: Create Studios
+    description: Create a new studio if a scraped studio name is not found in your library
+    type: BOOLEAN
+  create_performers:
+    displayName: Create Performers
+    description: Create new performers if scraped performer names are not found in your library
+    type: BOOLEAN
+  create_tags:
+    displayName: Create Tags
+    description: Create new tags if scraped tag names are not found in your library
+    type: BOOLEAN
+  overwrite_data:
+    displayName: Overwrite Existing Data
+    description: Overwrite scene fields (title, date, details, etc.) that already have values
+    type: BOOLEAN
+  stashbox_endpoint:
+    displayName: Stash-Box Endpoint
+    description: Stash-Box endpoint URL to use (leave empty to use the first one configured in Stash settings)
+    type: STRING
+  scraper_id:
+    displayName: Scraper ID
+    description: Scraper ID to use for scene scraping (leave empty to fall back to URL auto-detection)
+    type: STRING
+
+exec:
+  - python
+  - "{pluginDir}/stash-scrape.py"
+
+interface: raw
+errLog: warning
+
+tasks:
+  - name: Scrape All Scenes
+    description: Scrape metadata for every scene in the library
+    defaultArgs:
+      mode: scrape_all
+  - name: Scrape Scenes Without Metadata
+    description: Scrape only scenes that are missing a title or studio
+    defaultArgs:
+      mode: scrape_missing
+  - name: Scrape Single Scene
+    description: Scrape a single scene by ID (used internally by the UI button)
+    defaultArgs:
+      mode: scrape_scene
