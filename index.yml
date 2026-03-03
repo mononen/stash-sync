@@ -2,7 +2,7 @@
   name: Stash Sync
   version: 1.3.7
   date: "2026-03-02 19:16:50"
-  path: stash-sync.zip
+  path: stash-sync/stash-sync.zip
   sha256: 698b67487de2e9ac1089823e6a1a0d9d3d4bd26f248eef5688dd27ae0f3b0978
   metadata:
     description: Transfer scenes between two Stash instances with full metadata preservation

@@ -33,13 +33,21 @@ fi
 
 DATE=$(date +"%Y-%m-%d %H:%M:%S")
 
-# ── Generate index.yml ──
-cat > index.yml <<EOF
+# ── Update root index.yml (remove existing entry, append new one) ──
+ROOT_INDEX="${SCRIPT_DIR}/../index.yml"
+touch "$ROOT_INDEX"
+python3 -c "
+import re, sys
+content = open('${ROOT_INDEX}').read()
+content = re.sub(r'- id: ${PLUGIN_ID}\n(?:  [^\n]*\n)*', '', content)
+open('${ROOT_INDEX}', 'w').write(content)
+"
+cat >> "$ROOT_INDEX" <<EOF
 - id: ${PLUGIN_ID}
   name: Stash Scrape
   version: ${VERSION}
   date: "${DATE}"
-  path: ${PLUGIN_ID}.zip
+  path: stash-scrape/${PLUGIN_ID}.zip
   sha256: ${SHA}
   metadata:
     description: Scrape scene metadata in the background as a task, with configurable attribute creation
@@ -55,14 +63,14 @@ echo "  3. Enter the source URL (see below) and a name of your choice"
 echo ""
 
 # ── Print the source URL ──
-REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "")
+REMOTE_URL=$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || echo "")
 if [[ -n "$REMOTE_URL" ]]; then
     REPO_PATH="${REMOTE_URL#git@github.com:}"
     REPO_PATH="${REPO_PATH#https://github.com/}"
     REPO_PATH="${REPO_PATH%.git}"
-    BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
-    echo "  Source URL:  https://raw.githubusercontent.com/${REPO_PATH}/${BRANCH}/stash-scrape/index.yml"
+    BRANCH=$(git -C "$SCRIPT_DIR" branch --show-current 2>/dev/null || echo "main")
+    echo "  Source URL:  https://raw.githubusercontent.com/${REPO_PATH}/${BRANCH}/index.yml"
 else
-    echo "  Source URL:  https://raw.githubusercontent.com/<you>/stash-plugins/<branch>/stash-scrape/index.yml"
+    echo "  Source URL:  https://raw.githubusercontent.com/<you>/stash-plugins/<branch>/index.yml"
 fi
 echo ""
