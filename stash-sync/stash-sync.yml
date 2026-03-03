@@ -1,6 +1,6 @@
 name: Stash Sync
 description: Transfer scenes between two Stash instances with full metadata preservation
-version: 1.3.6
+version: 1.3.7
 
 ui:
   javascript:

@@ -182,8 +182,9 @@ def fetch_image_b64(stash, image_url):
         if image_url.startswith("/"):
             image_url = stash_base_url(stash) + image_url
         headers = {}
-        if stash.api_key:
-            headers["ApiKey"] = stash.api_key
+        api_key = getattr(stash, "api_key", None) or getattr(stash, "_api_key", None)
+        if api_key:
+            headers["ApiKey"] = api_key
         resp = requests.get(image_url, headers=headers, timeout=15)
         if resp.status_code == 200:
             ct = resp.headers.get("Content-Type", "image/jpeg")
@@ -493,6 +494,17 @@ def transfer_scene(scene_id, source, remote, resolver, dest_path, tag_name, remo
     dest_file = os.path.join(dest_path, filename)
     if os.path.exists(dest_file):
         raise FileExistsError(f"Destination already exists: {dest_file}")
+    if not os.path.exists(source_path):
+        log.warning(f"Source file not found: {source_path!r}; tagging scene {scene_id} with 'missing'")
+        missing_tag_id = ensure_tag(source, "missing")
+        current_tag_ids = [t["id"] for t in (scene.get("tags") or [])]
+        if missing_tag_id not in current_tag_ids:
+            current_tag_ids.append(missing_tag_id)
+            gql(source, SCENE_UPDATE, {"input": {"id": str(scene_id), "tag_ids": current_tag_ids}})
+        raise FileNotFoundError(
+            f"Source file not found at path stored in Stash: {source_path!r}. "
+            "Scene tagged with 'missing'. The file may have been moved or deleted outside Stash."
+        )
     log.info(f"[Filesystem] Step 4/9: Ensuring destination dir exists: {dest_path}")
     os.makedirs(dest_path, exist_ok=True)
     log.info(f"[Filesystem] Step 4/9: Moving file: {source_path} -> {dest_file}")
