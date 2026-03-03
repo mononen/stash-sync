@@ -65,12 +65,13 @@ query FindScene($id: ID!) {
 }
 """
 
-# queryStashBoxScene replaced scrapeSingleScene in Stash v0.26+.
-# It matches the scene against stash-box using its fingerprints and returns
-# the best candidates. remote_site_id carries the stash-box scene ID.
-QUERY_STASHBOX_SCENE = """
-query QueryStashBoxScene($input: StashBoxSceneQueryInput!) {
-    queryStashBoxScene(input: $input) {
+# Both scraping operations are QUERIES in Stash v0.30 (not mutations).
+# scrapeSingleScene returns [ScrapedScene!]! (a list — take index 0).
+# scrapeSceneURL returns ScrapedScene (single item).
+
+SCRAPE_SINGLE_SCENE = """
+query ScrapeSingleScene($source: ScraperSourceInput!, $input: ScrapeSingleSceneInput!) {
+    scrapeSingleScene(source: $source, input: $input) {
         title
         details
         date
@@ -85,7 +86,7 @@ query QueryStashBoxScene($input: StashBoxSceneQueryInput!) {
 """
 
 SCRAPE_SCENE_URL = """
-mutation ScrapeSceneURL($url: String!) {
+query ScrapeSceneURL($url: String!) {
     scrapeSceneURL(url: $url) {
         title
         details
@@ -349,20 +350,22 @@ def scrape_scene(stash, scene, stashbox_endpoint):
     """Return scraped metadata for a scene, trying each strategy in order."""
     scene_id = scene["id"]
 
-    # 1. Stash-box fingerprint query (v0.26+ replacement for scrapeSingleScene).
-    #    Stash matches the scene against stash-box using its file fingerprints.
+    # 1. Stash-box fingerprint match via scrapeSingleScene (a Query in v0.30).
+    #    Stash uses the scene's file fingerprints to query stash-box.
+    #    Returns a list; first result is the best match.
     if stashbox_endpoint:
         try:
-            res = gql(stash, QUERY_STASHBOX_SCENE, {
-                "input": {"stash_box_endpoint": stashbox_endpoint, "scene_id": scene_id}
+            res = gql(stash, SCRAPE_SINGLE_SCENE, {
+                "source": {"stash_box_endpoint": stashbox_endpoint},
+                "input": {"scene_id": scene_id},
             })
-            results = res.get("queryStashBoxScene") or []
+            results = res.get("scrapeSingleScene") or []
             if results:
-                return results[0]  # best fingerprint match
+                return results[0]
         except Exception as exc:
-            log.warning(f"Stash-box query failed for scene {scene_id}: {exc}")
+            log.warning(f"Stash-box scrape failed for scene {scene_id}: {exc}")
 
-    # 2. URL scraping — auto-detects the right scraper from the URL
+    # 2. URL scraping — also a Query in v0.30, auto-detects scraper from URL.
     for url in scene.get("urls") or []:
         if not url:
             continue

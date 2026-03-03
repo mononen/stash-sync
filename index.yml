@@ -1,16 +1,16 @@
 - id: stash-sync
   name: Stash Sync
   version: 1.3.7
-  date: "2026-03-02 21:00:14"
+  date: "2026-03-02 21:24:25"
   path: stash-sync/stash-sync.zip
-  sha256: d090a30207fb98203535bc1ade8698e573a9e3873b746407704aeaddf26952aa
+  sha256: d79ff247eba9f8aeafa59713236623ee72366d1d60d837d28a7be500a71d7bd8
   metadata:
     description: Transfer scenes between two Stash instances with full metadata preservation
 - id: stash-scrape
   name: Stash Scrape
-  version: 0.2.2
-  date: "2026-03-02 21:00:14"
+  version: 0.2.3
+  date: "2026-03-02 21:24:25"
   path: stash-scrape/stash-scrape.zip
-  sha256: 893c3631dea2a1bdfcdfd367516047a56b9fc06d325bc8fb7e1c2717b3cd2a6f
+  sha256: cf808aada04d9a8a9af08e014014d555853fb188b8d7af5b621d56d17ab43cbb
   metadata:
     description: Scrape scene metadata in the background as a task, with configurable attribute creation
