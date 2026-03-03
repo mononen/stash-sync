@@ -1,6 +1,6 @@
 name: Stash Scrape
 description: Scrape scene metadata in the background as a task
-version: 0.2.0
+version: 0.2.1
 
 ui:
   javascript:

@@ -67,7 +67,7 @@ query FindScene($id: ID!) {
 
 # remote_site_id is the stash-box ID returned alongside scraped metadata
 SCRAPE_SINGLE_SCENE = """
-mutation ScrapeSingleScene($source: ScrapeSource!, $input: ScrapeSingleSceneInput!) {
+mutation ScrapeSingleScene($source: ScraperSourceInput!, $input: ScrapeSingleSceneInput!) {
     scrapeSingleScene(source: $source, input: $input) {
         title
         details
